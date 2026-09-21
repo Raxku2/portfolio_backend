@@ -50,34 +50,67 @@ export const googleAuthCallback = async (req, res) => {
 
     const db = getDB();
     const collection = db.collection("user");
-    
-    let result = await collection.findOne({'email':googleUser.email});
-    
-    if (!result){
-      result = await collection.insertOne({
-        "email":googleUser.email,
-        "name":googleUser.name,
-        "dp":googleUser.picture
-      });
-      result._id = result.insertedId;
-    }else{
-      await collection.updateOne({"email":googleUser.email},{$set:{"dp":googleUser.picture}});
-    } 
-    console.log(result);
+
+    let result = await collection.findOne({ email: googleUser.email });
 
     const simpleSessionId = Math.random().toString(36).substring(2, 15);
+
+    if (!result) {
+      result = await collection.insertOne({
+        email: googleUser.email,
+        name: googleUser.name,
+        dp: googleUser.picture,
+        sessionId: simpleSessionId,
+      });
+      result._id = result.insertedId;
+    } else {
+      await collection.updateOne(
+        { email: googleUser.email },
+        { $set: { dp: googleUser.picture, sessionId: simpleSessionId } },
+      );
+    }
+    // console.log(result);
 
     // 2. Encode the user's name so spaces and special characters don't break the HTTP headers
     const safeName = encodeURIComponent(googleUser.name);
 
     // 3. Ensure the base URL is clean and doesn't rely on trailing slashes in your .env
     // We remove any accidental trailing slashes from FRONT_END_URL, then explicitly add "/login"
-    const finalRedirectUrl = `${FRONT_END_URL}/login?uid=${new String(result._id)}&session=${simpleSessionId}&name=${safeName}`;
+    const finalRedirectUrl = `${FRONT_END_URL}/login?session=${simpleSessionId}&name=${safeName}`;
 
     // D. Step 5: Redirect back to the frontend
     res.redirect(finalRedirectUrl);
   } catch (error) {
     console.error("Auth error:", error);
     res.send("Authentication failed");
+  }
+};
+
+export const validateSession = async (req, res) => {
+  const sessionId = req.get("sessionId");
+
+  if (!sessionId) {
+    res.status(400).send();
+    return;
+  }
+  try {
+    const db = getDB();
+    const collection = db.collection("user");
+
+    let result = await collection.findOne({ sessionId: sessionId }, {});
+    if (!result){
+      res.status(401).send();
+      return
+    }
+    await collection.updateOne(
+      { sessionId: sessionId },
+      { $set: { sessionId: "" } },
+    );
+
+
+    result._id = new String(result._id);
+    res.json(result);
+  } catch (error) {
+    res.json({}).status(500);
   }
 };

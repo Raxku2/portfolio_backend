@@ -3,10 +3,16 @@ import portfolioRouter from "./routes/portfolioRouter.js";
 import { connectDB } from "./config/db.js";
 import cors from "cors";
 import { authRouter } from "./routes/authRouter.js";
+import cookieParser from "cookie-parser";
+
 const app = express();
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL,
+  credentials: true
+}));
+app.use(cookieParser());
 
 app.use("/portfolio", portfolioRouter);
 app.use("/auth", authRouter);
