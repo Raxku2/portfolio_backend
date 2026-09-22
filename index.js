@@ -9,7 +9,7 @@ const app = express();
 
 app.use(express.json());
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
+  origin: [process.env.FRONTEND_URL,"https://ku2-portfolio.vercel.app"],
   credentials: true
 }));
 app.use(cookieParser());
