@@ -4,6 +4,7 @@ import { connectDB } from "./config/db.js";
 import cors from "cors";
 import { authRouter } from "./routes/authRouter.js";
 import cookieParser from "cookie-parser";
+import { messageRouter } from "./routes/messageRouter.js";
 
 const app = express();
 
@@ -13,6 +14,7 @@ app.use(cookieParser());
 
 app.use("/portfolio", portfolioRouter);
 app.use("/auth", authRouter);
+app.use("/message",messageRouter);
 
 app.get("/", (req, res) => {
   res.send("ok");
