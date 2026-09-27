@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
 import { getDB } from "../config/db.js";
 import { portfolioInfo } from "../models/portInfoModels.js";
+import { validateAdmin } from "../config/admin.js";
 
 export const updatePortfolio = async (req, res) => {
   try {
@@ -8,10 +9,13 @@ export const updatePortfolio = async (req, res) => {
     const { id } = req.params;
 
     // 2. Prevent MongoDB crashes by ensuring the ID string is a valid 24-char hex format
-    if (!ObjectId.isValid(id)) {
+    if (!ObjectId.isValid(id) || !req.headers.authorization) {
       return res.status(400).json({ error: "Invalid document ID format" });
     }
 
+    if (!(await validateAdmin(req.headers.authorization))) {
+      return res.status(400).json({ error: "Invalid document ID format" });
+    }
     // 3. Format data using your model
     const cleanData = portfolioInfo.format(req.body);
 
@@ -75,7 +79,8 @@ export const getSkills = async (req, res) => {
     const collection = db.collection("portfolio");
 
     const result = await collection.findOne(
-      { _id: new ObjectId("6aa03a63131f38ee7be163bd") },{projection:{_id:0}} // Convert string to ObjectId
+      { _id: new ObjectId("6aa03a63131f38ee7be163bd") },
+      { projection: { _id: 0 } }, // Convert string to ObjectId
     );
 
     if (!result) {
@@ -91,6 +96,9 @@ export const getSkills = async (req, res) => {
 
 export const makeCatagory = async (req, res) => {
   try {
+    if (!(await validateAdmin(req.headers.authorization))) {
+      return res.status(400).json({ error: "Invalid document ID format" });
+    }
     const db = getDB();
     const collection = db.collection("portfolio");
     const body = {};
@@ -98,7 +106,7 @@ export const makeCatagory = async (req, res) => {
     const data = req.body.catagory;
 
     if (data !== undefined) body.catagory = String(data).trim().toUpperCase();
-    console.log(data);
+    // console.log(data);
 
     const result = await collection.updateOne(
       {
@@ -121,6 +129,9 @@ export const makeCatagory = async (req, res) => {
 
 export const updateCatagory = async (req, res) => {
   try {
+    if (!(await validateAdmin(req.headers.authorization))) {
+      return res.status(400).json({ error: "Invalid document ID format" });
+    }
     const db = getDB();
     const collection = db.collection("portfolio");
     const body = {};
@@ -154,6 +165,9 @@ export const updateCatagory = async (req, res) => {
 
 export const removeCatagory = async (req, res) => {
   try {
+    if (!(await validateAdmin(req.headers.authorization))) {
+      return res.status(400).json({ error: "Invalid document ID format" });
+    }
     const db = getDB();
     const collection = db.collection("portfolio");
     const body = {};
@@ -161,7 +175,7 @@ export const removeCatagory = async (req, res) => {
     const data = req.body.catagory;
 
     if (data !== undefined) body.catagory = String(data).trim().toUpperCase();
-    console.log(data);
+    // console.log(data);
 
     const result = await collection.updateOne(
       {
@@ -184,6 +198,9 @@ export const removeCatagory = async (req, res) => {
 
 export const addSkill = async (req, res) => {
   try {
+    if (!(await validateAdmin(req.headers.authorization))) {
+      return res.status(400).json({ error: "Invalid document ID format" });
+    }
     const db = getDB();
     const collection = db.collection("portfolio");
     const body = req.body;
@@ -201,13 +218,13 @@ export const addSkill = async (req, res) => {
       body.url !== ""
     ) {
       skillCtgory = String(body.catagory).trim().toUpperCase();
-      data.ID = new ObjectId()
+      data.ID = new ObjectId();
       data.name = String(body.name);
       data.desc = String(body.desc);
       data.url = String(body.url);
-    }else{
+    } else {
       throw new Error("Missing data field");
-    } 
+    }
 
     const result = await collection.updateOne(
       {
@@ -228,10 +245,11 @@ export const addSkill = async (req, res) => {
   }
 };
 
-
-
 export const removeSkill = async (req, res) => {
   try {
+    if (!(await validateAdmin(req.headers.authorization))) {
+      return res.status(400).json({ error: "Invalid document ID format" });
+    }
     const db = getDB();
     const collection = db.collection("portfolio");
     const body = req.body;
@@ -244,18 +262,17 @@ export const removeSkill = async (req, res) => {
     ) {
       skillID = new ObjectId(body.ID);
       skillCatagory = body.catagory.trim().toUpperCase();
-    }else{
+    } else {
       throw new Error("Missing data field");
-    } 
+    }
 
     const result = await collection.updateOne(
       {
         _id: new ObjectId("6aa03a63131f38ee7be163bd"),
         [skillCatagory]: { $exists: true },
       },
-      { $pull: { [skillCatagory]: {ID: skillID } } },
+      { $pull: { [skillCatagory]: { ID: skillID } } },
     );
-
 
     console.log(result);
 
@@ -264,6 +281,74 @@ export const removeSkill = async (req, res) => {
     }
 
     res.json({ message: "removed successfully", result });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const addExperience = async (req, res) => {
+  try {
+    if (!(await validateAdmin(req.headers.authorization))) {
+      return res.status(400).json({ error: "Invalid document ID format" });
+    }
+
+    const db = getDB();
+    const collection = db.collection("portfolio");
+
+    const body = req.body;
+    const data = {};
+
+    if (
+      body.title !== undefined &&
+      body.desc !== undefined &&
+      body.date !== undefined &&
+      body.catagory !== undefined
+    ) {
+      data.id = String(new ObjectId());
+      data.title = String(body.title);
+      data.desc = String(body.desc);
+      data.date = String(body.date);
+      data.catagory = String(body.catagory);
+      data.url = String(body.url);
+    } else {
+      throw new Error("Missing data field");
+    }
+
+    const result = await collection.updateOne(
+      {
+        _id: new ObjectId("6ab920198240535113feb88e"),
+      },
+      { $push: { exp: data } },
+    );
+
+    if (!result.modifiedCount) {
+      return res.status(417).json({ error: "experience not updated" });
+    }
+
+    res.json({ message: "Updated successfully", result });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: error.message });
+  }
+};
+
+export const readExperience = async (req, res) => {
+  try {
+    const db = getDB();
+    const collection = db.collection("portfolio");
+
+    const result = await collection.findOne(
+      {
+        _id: new ObjectId("6ab920198240535113feb88e"),
+      },
+      { projection: { exp: 1, _id: 0 } },
+    );
+
+    if (!result) {
+      return res.status(417).json({ error: "experience not updated" });
+    }
+    res.json(result.exp);
   } catch (error) {
     console.error(error);
     res.status(400).json({ error: error.message });

@@ -1,9 +1,11 @@
 import { Router } from "express";
 import {
+    addExperience,
   addSkill,
   getPortfolio,
   getSkills,
   makeCatagory,
+  readExperience,
   removeCatagory,
   removeSkill,
   updateCatagory,
@@ -29,5 +31,11 @@ router.post("/skill", addSkill);
 // router.put('/skill');
 //
 router.delete('/skill',removeSkill);
+
+router.get('/experience',readExperience);
+router.post('/experience',addExperience);
+router.patch('/experience',()=>{});
+router.delete('/experience',()=>{});
+
 
 export default router;

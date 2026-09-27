@@ -20,6 +20,9 @@ export class portfolioInfo {
       formatted.bio = data.bio;
     }
 
+    if (data.online !== undefined) formatted.online = data.online;
+    if (data.work_load !== undefined) formatted.work_load = String(data.work_load).trim();
+
     // 3. Ensure at least one valid field was actually formatted
     if (Object.keys(formatted).length === 0) {
       throw new Error("At least one valid field must be provided.");

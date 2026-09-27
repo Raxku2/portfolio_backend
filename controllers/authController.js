@@ -97,16 +97,18 @@ export const validateSession = async (req, res) => {
     const db = getDB();
     const collection = db.collection("user");
 
-    let result = await collection.findOne({ sessionId: sessionId }, {});
-    if (!result){
+    let result = await collection.findOne(
+      { sessionId: sessionId },
+      { projection: { key: 0 } },
+    );
+    if (!result) {
       res.status(401).send();
-      return
+      return;
     }
     await collection.updateOne(
       { sessionId: sessionId },
       { $set: { sessionId: "" } },
     );
-
 
     result._id = new String(result._id);
     res.json(result);
