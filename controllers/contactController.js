@@ -13,6 +13,7 @@ export const saveMessage = async (req, res) => {
       body.mail = req.body.email;
       body.message = req.body.message;
       body._id = String(new ObjectId());
+      body.time = String(new Date());
     } else {
       res.status(422).send();
     }

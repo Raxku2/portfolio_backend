@@ -5,6 +5,8 @@ import cors from "cors";
 import { authRouter } from "./routes/authRouter.js";
 import cookieParser from "cookie-parser";
 import { messageRouter } from "./routes/messageRouter.js";
+import projectRouter from "./routes/projectRouter.js";
+import imagekitRouter from "./routes/imagekitRouter.js";
 
 const app = express();
 
@@ -14,7 +16,9 @@ app.use(cookieParser());
 
 app.use("/portfolio", portfolioRouter);
 app.use("/auth", authRouter);
-app.use("/message",messageRouter);
+app.use("/message", messageRouter);
+app.use("/projects", projectRouter);
+app.use("/imagekit", imagekitRouter);
 
 app.get("/", (req, res) => {
   res.send("ok");
@@ -31,11 +35,8 @@ app.get("/health", (req, res) => {
 try {
   console.log("Attempting to connect to database...");
   await connectDB();
-
-  // 2. Only start listening for requests if the DB connected successfully
   app.listen(8001);
 } catch (error) {
-  // 3. If the DB fails to connect, log the error and don't start the server
   console.error("Failed to connect to MongoDB:", error.message);
   process.exit(1);
 }

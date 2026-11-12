@@ -97,20 +97,44 @@ export const validateSession = async (req, res) => {
     const db = getDB();
     const collection = db.collection("user");
 
-    let result = await collection.findOne({ sessionId: sessionId }, {});
-    if (!result){
+    let result = await collection.findOne({ sessionId: sessionId });
+    if (!result) {
       res.status(401).send();
-      return
+      return;
     }
-    await collection.updateOne(
-      { sessionId: sessionId },
-      { $set: { sessionId: "" } },
-    );
 
+    // Root / admin flag is derived here so the frontend can gate the dashboard;
+    // the secret ROOT_KEY itself never leaves the server.
+    const isAdmin =
+      Boolean(process.env.ROOT_KEY) && result.key === process.env.ROOT_KEY;
+    delete result.key;
 
-    result._id = new String(result._id);
+    // Keep the session valid across refreshes. Only /auth/logout clears it.
+    result._id = String(result._id);
+    result.isAdmin = isAdmin;
     res.json(result);
   } catch (error) {
     res.json({}).status(500);
+  }
+};
+
+/*
+  Destroys the server-side session so the stored id cannot be reused.
+  The frontend clears localStorage before calling this endpoint.
+*/
+export const logout = async (req, res) => {
+  const sessionId = req.get("sessionId");
+  if (!sessionId) {
+    res.status(204).send();
+    return;
+  }
+
+  try {
+    await getDB()
+      .collection("user")
+      .updateOne({ sessionId: sessionId }, { $set: { sessionId: "" } });
+    res.status(204).send();
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
