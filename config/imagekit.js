@@ -1,30 +1,36 @@
-import crypto from "crypto";
+import ImageKit from "imagekit";
 
-/*
-  ImageKit helpers.
-  - Uploads happen in the browser (frontend -> ImageKit) using short-lived auth
-    params generated here, so the private key never leaves the server.
-  - Deletions happen here, where the private key lives.
-*/
 const publicKey = () => process.env.IK_PUBKEY || "";
 const privateKey = () => process.env.IK_PRIKEY || "";
 const urlEndpoint = () => process.env.IK_ENDPOINT || "";
+
+// Lazy initialization ensures it doesn't crash if process.env is populated after import
+let imagekitInstance = null;
+const getImageKit = () => {
+  if (!imagekitInstance && isImageKitConfigured()) {
+    imagekitInstance = new ImageKit({
+      publicKey: publicKey(),
+      privateKey: privateKey(),
+      urlEndpoint: urlEndpoint(),
+    });
+  }
+  return imagekitInstance;
+};
 
 export const isImageKitConfigured = () =>
   Boolean(publicKey() && privateKey() && urlEndpoint());
 
 export const getUploadAuthParams = () => {
-  const token = crypto.randomBytes(32).toString("hex");
-  const expire = Math.floor(Date.now() / 1000) + 30 * 60; // 30 minutes
-  const signature = crypto
-    .createHmac("sha1", privateKey())
-    .update(token + expire)
-    .digest("hex");
+  const ik = getImageKit();
 
+  // Get base SDK parameters. Fallback to empty strings to mirror original crypto behavior if env vars are missing.
+  const authParams = ik
+    ? ik.getAuthenticationParameters()
+    : { token: "", expire: 0, signature: "" };
+
+  // Crucial: Append publicKey and urlEndpoint to precisely match your original return signature.
   return {
-    token,
-    expire,
-    signature,
+    ...authParams,
     publicKey: publicKey(),
     urlEndpoint: urlEndpoint(),
   };
@@ -38,24 +44,18 @@ export const deleteImageKitFile = async (fileId) => {
   if (!fileId || !isImageKitConfigured()) return false;
 
   try {
-    const res = await fetch(
-      `https://api.imagekit.io/v1/files/${encodeURIComponent(fileId)}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${privateKey()}:`).toString("base64")}`,
-        },
-      },
-    );
-
-    if (!res.ok && res.status !== 404) {
-      console.warn("[imagekit] delete failed:", res.status);
-      return false;
-    }
-
+    await getImageKit().deleteFile(fileId);
     return true;
   } catch (error) {
-    console.warn("[imagekit] delete error:", error.message);
+    // SDK error objects usually expose the status code. 
+    // We treat 404 as a success to match your original 'already missing' logic.
+    const is404 = error?.statusCode === 404 || error?.message?.includes("404");
+
+    if (is404) {
+      return true;
+    }
+
+    console.warn("[imagekit] delete failed:", error.message || error);
     return false;
   }
 };

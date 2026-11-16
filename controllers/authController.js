@@ -1,10 +1,28 @@
 import "dotenv/config";
 import { getDB } from "../config/db.js";
+import { google } from "googleapis"; // Import the official SDK
 
 const FRONT_END_URL = process.env.FRONTEND_URL;
 
+// Helper function to create a fresh OAuth client for each request
+// This prevents race conditions if multiple users log in simultaneously.
+const getGoogleClient = () => {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+};
+
 export const googleAuthStart = (req, res) => {
-  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${process.env.GOOGLE_REDIRECT_URI}&response_type=code&scope=email profile`;
+  const oauth2Client = getGoogleClient();
+
+  // The SDK safely generates the URL with the correct formatting and encoding
+  const googleAuthUrl = oauth2Client.generateAuthUrl({
+    access_type: "online", 
+    scope: ["email", "profile"],
+  });
+  
   res.redirect(googleAuthUrl);
 };
 
@@ -12,47 +30,30 @@ export const googleAuthCallback = async (req, res) => {
   const code = req.query.code;
 
   if (!code) {
-    return res.send("No code provided by Google");
+    return res.status(400).send("No code provided by Google");
   }
 
   try {
-    // A. Exchange the code for an Access Token
-    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        code: code,
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: process.env.GOOGLE_REDIRECT_URI,
-        grant_type: "authorization_code",
-      }),
-    });
+    const oauth2Client = getGoogleClient();
 
-    const tokenData = await tokenResponse.json();
-    const accessToken = tokenData.access_token;
+    // A. Exchange the code for tokens (SDK handles the POST request internally)
+    const { tokens } = await oauth2Client.getToken(code);
+    
+    // B. Apply the tokens to our specific client so it knows who is making the next request
+    oauth2Client.setCredentials(tokens);
 
-    // B. Use the Access Token to get the user's email and name
-    const userResponse = await fetch(
-      "https://www.googleapis.com/oauth2/v2/userinfo",
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    );
+    // C. Fetch the user's profile info (SDK handles Bearer headers and error catching)
+    const googleOauth2API = google.oauth2("v2");
+    const userResponse = await googleOauth2API.userinfo.get({ auth: oauth2Client });
+    
+    // The SDK automatically parses the JSON response into the .data property
+    const googleUser = userResponse.data;
 
-    const googleUser = await userResponse.json();
-
-    // 1. Check if Google actually returned an error (e.g., if you refreshed the page and reused an old code)
-    if (googleUser.error) {
-      console.error("Google API Error:", googleUser);
-      return res.status(400).send("Failed to fetch user profile");
-    }
-
+    // --- YOUR ORIGINAL DATABASE LOGIC STARTS HERE (Unchanged) ---
     const db = getDB();
     const collection = db.collection("user");
 
     let result = await collection.findOne({ email: googleUser.email });
-
     const simpleSessionId = Math.random().toString(36).substring(2, 15);
 
     if (!result) {
@@ -69,22 +70,19 @@ export const googleAuthCallback = async (req, res) => {
         { $set: { dp: googleUser.picture, sessionId: simpleSessionId } },
       );
     }
-    // console.log(result);
+    // --- YOUR ORIGINAL DATABASE LOGIC ENDS HERE ---
 
-    // 2. Encode the user's name so spaces and special characters don't break the HTTP headers
     const safeName = encodeURIComponent(googleUser.name);
-
-    // 3. Ensure the base URL is clean and doesn't rely on trailing slashes in your .env
-    // We remove any accidental trailing slashes from FRONT_END_URL, then explicitly add "/login"
     const finalRedirectUrl = `${FRONT_END_URL}/login?session=${simpleSessionId}&name=${safeName}`;
 
-    // D. Step 5: Redirect back to the frontend
     res.redirect(finalRedirectUrl);
   } catch (error) {
-    console.error("Auth error:", error);
-    res.send("Authentication failed");
+    console.error("Google Auth error:", error.message || error);
+    res.status(500).send("Authentication failed");
   }
 };
+
+
 
 export const validateSession = async (req, res) => {
   const sessionId = req.get("sessionId");
